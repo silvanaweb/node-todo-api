@@ -8,6 +8,7 @@ const _ = require('lodash');
 var { mongoose } = require('./db/mongoose');
 var { Todo } = require('./models/todo');
 var { User } = require('./models/user');
+var {authenticate} = require('./middleware/authenticate');
 
 
 var app = express();
@@ -103,6 +104,13 @@ app.post('/users', (req, res) => {
         res.status(400).send(err);
     });
 
+});
+
+
+// all the other function should take advantage from this one without replicating
+// the functions of authentication in them
+app.get('/users/me', authenticate, (req, res) => {
+    res.send(req.user);
 });
 
 app.listen(port, () => {
