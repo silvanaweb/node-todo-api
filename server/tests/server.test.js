@@ -7,6 +7,7 @@ const {Todo} = require('./../models/todo');
 
 const {todosMock, populateTodos, usersMock, populateUsers } = require('./seed/seed');
 
+beforeEach (populateUsers);
 beforeEach (populateTodos);
 
 describe('POST /todos', () => {
@@ -15,6 +16,7 @@ describe('POST /todos', () => {
 
         request(app)
         .post('/todos')
+        .set('x-auth', usersMock[0].tokens[0].token)
         .send({text})
         .expect(200)
         .expect((res) => {
@@ -35,6 +37,7 @@ describe('POST /todos', () => {
     it ('should not create todo with invalid data', (done) => {
         request(app)
         .post('/todos')
+        .set('x-auth', usersMock[0].tokens[0].token)
         .send({})
         .expect(400)
         .end((err, res) => {
@@ -53,9 +56,10 @@ describe('GET /todos', () => {
     it('shoud get all the todos', (done) => {
         request(app)
             .get('/todos')
+            .set('x-auth', usersMock[0].tokens[0].token)
             .expect(200)
             .expect( ( (res) => {
-                expect(res.body.todos.length).toBe(2);
+                expect(res.body.todos.length).toBe(1);
             }))
             .end(done);
     })
@@ -63,10 +67,11 @@ describe('GET /todos', () => {
 });
 
 describe('GET /todos/:id', () => {
-    it('shoud return todo doc', (done) => {
+    it('should return todo doc', (done) => {
         let id = todosMock[0]._id.toHexString();
         request(app)
             .get(`/todos/${id}`)
+            .set('x-auth', usersMock[0].tokens[0].token)
             .expect(200)
             .expect(( (res) => {
                 expect(res.body.todo.text).toBe(todosMock[0].text);
@@ -74,10 +79,20 @@ describe('GET /todos/:id', () => {
             .end(done);
     });
 
+    it('shoud not return todo doc of other users', (done) => {
+        let id = todosMock[1]._id.toHexString();
+        request(app)
+            .get(`/todos/${id}`)
+            .set('x-auth', usersMock[0].tokens[0].token)
+            .expect(404)
+            .end(done);
+    });
+
     it ('should return 404 if todo not found', (done) => {
         let id = new ObjectID().toHexString();
         request(app)
             .get(`/todos/${id}`)
+            .set('x-auth', usersMock[0].tokens[0].token)
             .expect(404)
             .end(done);
     });
@@ -85,6 +100,7 @@ describe('GET /todos/:id', () => {
         let id = 123;
         request(app)
             .get(`/todos/${id}`)
+            .set('x-auth', usersMock[0].tokens[0].token)
             .expect(404)
             .end(done);
     });
@@ -92,12 +108,12 @@ describe('GET /todos/:id', () => {
 
 });
 
-
 describe('DELETE /todos/:id', () => {
     it('shoud remove a todo', (done) => {
         let id = todosMock[1]._id.toHexString();
         request(app)
             .delete(`/todos/${id}`)
+            .set('x-auth', usersMock[1].tokens[0].token)
             .expect(200)
             .expect(( (res) => {
                 expect(res.body.todo._id).toBe(id);
@@ -112,10 +128,27 @@ describe('DELETE /todos/:id', () => {
                 }).catch((e) => done(e));
             });
     });
+    it('shoud NOT remove a todo of someone else', (done) => {
+        let id = todosMock[0]._id.toHexString();
+        request(app)
+            .delete(`/todos/${id}`)
+            .set('x-auth', usersMock[1].tokens[0].token)
+            .expect(404)
+            .end((err, res) => {
+                if (err) {
+                    return done(err);
+                }
+                Todo.findById(id).then((todo) => {
+                    expect(todo).toExist();
+                    done();
+                }).catch((e) => done(e));
+            });
+    });
     it ('should return 404 if todo not found', (done) => {
         let id = new ObjectID().toHexString();
         request(app)
             .delete(`/todos/${id}`)
+            .set('x-auth', usersMock[1].tokens[0].token)
             .expect(404)
             .end(done);
     });
@@ -123,6 +156,7 @@ describe('DELETE /todos/:id', () => {
         let id = 123;
         request(app)
             .delete(`/todos/${id}`)
+            .set('x-auth', usersMock[1].tokens[0].token)
             .expect(404)
             .end(done);
     });
@@ -138,6 +172,7 @@ describe('PATCH /todos/:id', () => {
         }
         request(app)
             .patch(`/todos/${id}`)
+            .set('x-auth', usersMock[0].tokens[0].token)
             .send(body)
             .expect(200)
             .expect((res) => {
@@ -147,7 +182,20 @@ describe('PATCH /todos/:id', () => {
             })
             .end(done);
     });
-    it('shoud clear copmleteAt when todo is made incomplete', (done) => {
+    it('shoud NOT update todo of other user', (done) => {
+        let id = todosMock[0]._id.toHexString();
+        let body = {
+            text: "New",
+            completed: true
+        }
+        request(app)
+            .patch(`/todos/${id}`)
+            .set('x-auth', usersMock[1].tokens[0].token)
+            .send(body)
+            .expect(404)
+            .end(done);
+    });
+    it('shoud clear completeAt when todo is made incomplete', (done) => {
         let id = todosMock[1]._id.toHexString();
         let body = {
             text: "New",
@@ -155,6 +203,7 @@ describe('PATCH /todos/:id', () => {
         }
         request(app)
             .patch(`/todos/${id}`)
+            .set('x-auth', usersMock[1].tokens[0].token)
             .send(body)
             .expect(200)
             .expect((res) => {
